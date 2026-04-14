@@ -274,15 +274,30 @@ def parse(source):
         if peek() == "++":
             _, ln = consume("++")
             consume(";")
-            n = Assignment(target, BinaryOp("+", target, Number(1)))
+            one = Number(1)
+            one.line = ln
+
+            binop = BinaryOp("+", target, one)
+            binop.line = ln
+
+            n = Assignment(target, binop)
             n.line = ln
+
+            
             return n
 
         if peek() == "--":
             _, ln = consume("--")
             consume(";")
-            n = Assignment(target, BinaryOp("-", target, Number(1)))
+            one = Number(1)
+            one.line = ln
+
+            binop = BinaryOp("-", target, one)
+            binop.line = ln
+
+            n = Assignment(target, binop)
             n.line = ln
+
             return n
 
         raise SyntaxError(f"Asignación inválida en la línea {line()}")
@@ -355,13 +370,30 @@ def parse(source):
 
             elif peek() == "++":
                 consume("++")
-                update = Assignment(target, BinaryOp("+", target, Number(1)))
+                one = Number(1)
+                one.line = ln
+                one = Number(1)
+                one.line = ln
+
+                binop = BinaryOp("+", target, one)
+                binop.line = ln
+
+                update = Assignment(target, binop)
+                update.line = ln
+
 
             elif peek() == "--":
                 consume("--")
-                update = Assignment(target, BinaryOp("-", target, Number(1)))
+                one = Number(1)
+                one.line = ln
 
-            update.line = ln
+                binop = BinaryOp("-", target, one)
+                binop.line = ln
+
+                update = Assignment(target, binop)
+                update.line = ln
+
+            
 
         consume(")")
 

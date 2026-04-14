@@ -1,14 +1,30 @@
 from model import *
 from symtab import Symtab
 from typesys import check_binop
+from multimethod import multimeta
+
+class Visitor(metaclass=multimeta):
+    pass
 
 
-class Checker:
+class Checker(Visitor):
     def __init__(self):
         self.env = Symtab("global")
         self.errors = []
         self.error_set = set()
         self.current_function = None
+
+
+    def visit(self, node):
+        method = f"visit_{type(node).__name__}"
+        return getattr(self, method, self.generic_visit)(node)
+
+
+    def visit(self, node: list):
+        for n in node:
+            self.visit(n)
+
+
 
     # ================= ERROR =================
 
@@ -32,17 +48,23 @@ class Checker:
 
     # ================= SYMBOLS =================
 
+
+
+
+    def lookup(self, name, node=None):
+        value = self.env.get(name)
+        if value is None:
+            self.error(f"símbolo '{name}' no definido", node)
+        return value
+    
+
     def define(self, name, type_):
         try:
             self.env.add(name, type_)
         except Exception as e:
             self.error(str(e))
 
-    def lookup(self, name):
-        value = self.env.get(name)
-        if value is None:
-            self.error(f"símbolo '{name}' no definido")
-        return value
+
 
     # ================= VISITOR =================
 
@@ -66,8 +88,21 @@ class Checker:
     # ================= PROGRAM =================
 
     def visit_Program(self, node):
+        # 1. registrar funciones primero
         for d in node.declarations:
-            self.visit(d)
+            if isinstance(d, Function):
+                func_type = FunctionType(d.return_type, [p.type for p in d.params])
+                self.define(d.name, func_type)
+
+        # 2. luego todo lo demás
+        for d in node.declarations:
+            if not isinstance(d, Function):
+                self.visit(d)
+
+        # 3. visitar cuerpos de funciones
+        for d in node.declarations:
+            if isinstance(d, Function):
+                self.visit(d)
 
     # ================= DECLARACIONES =================
 
@@ -85,7 +120,7 @@ class Checker:
 
     def visit_Function(self, node):
         func_type = FunctionType(node.return_type, [p.type for p in node.params])
-        self.define(node.name, func_type)
+        
 
         self.push()
         self.current_function = node
@@ -101,8 +136,10 @@ class Checker:
                     has_return = True
                 self.visit(stmt)
 
-        if node.return_type != VoidType and not self.has_return_stmt(node.body):
-            self.error(f"la función '{node.name}' debe retornar un valor", node)
+        if node.return_type != VoidType:
+            if not self.must_return(node.body):
+                self.error(f"la función '{node.name}' debe retornar en todos los caminos", node)
+
 
         self.pop()
         self.current_function = None
@@ -118,12 +155,17 @@ class Checker:
     # ================= STATEMENTS =================
 
     def visit_Assignment(self, node):
-        t1 = self.visit(node.target)
+        if not isinstance(node.target, Identifier):
+            self.error("lado izquierdo inválido en asignación", node)
+            return
+
+        t1 = self.lookup(node.target.name, node)
         t2 = self.visit(node.value)
 
-        if t1 and t2 and t1 != t2:
+        if t1 is not None and t2 is not None and t1 != t2:
             self.error(f"no se puede asignar {t2} a {t1}", node)
 
+        
     def visit_Return(self, node):
         if not self.current_function:
             self.error("return fuera de función", node)
@@ -133,7 +175,7 @@ class Checker:
 
         if node.value:
             val_type = self.visit(node.value)
-            if val_type and val_type != expected:
+            if val_type is not None and val_type != expected:
                 self.error("tipo de retorno incorrecto", node)
         else:
             if expected != VoidType:
@@ -145,7 +187,7 @@ class Checker:
 
     def visit_If(self, node):
         cond = self.visit(node.cond)
-        if cond != BooleanType:
+        if cond is not None and cond != BooleanType:
             self.error("la condición del if debe ser boolean", node)
 
         self.visit(node.then_body)
@@ -155,7 +197,7 @@ class Checker:
 
     def visit_While(self, node):
         cond = self.visit(node.cond)
-        if cond != BooleanType:
+        if cond is not None and cond != BooleanType:
             self.error("la condición del while debe ser boolean", node)
 
         self.visit(node.body)
@@ -167,7 +209,7 @@ class Checker:
             self.visit(node.init)
 
         cond = self.visit(node.cond)
-        if cond != BooleanType:
+        if cond is not None and cond != BooleanType:
             self.error("la condición del for debe ser boolean", node)
 
         if node.update:
@@ -178,14 +220,31 @@ class Checker:
 
     # ================= EXPRESIONES =================
 
-    def visit_Number(self, node): return IntegerType
-    def visit_Float(self, node): return FloatType
-    def visit_String(self, node): return StringType
-    def visit_Char(self, node): return CharType
-    def visit_Boolean(self, node): return BooleanType
+    def visit_Number(self, node):
+        node.type = IntegerType
+        return node.type
+
+
+    def visit_Float(self, node):
+        node.type = FloatType
+        return node.type
+
+    def visit_String(self, node):
+        node.type = StringType
+        return node.type
+
+    def visit_Char(self, node):
+        node.type = CharType
+        return node.type
+
+    def visit_Boolean(self, node):
+        node.type = BooleanType
+        return node.type
 
     def visit_Identifier(self, node):
-        return self.lookup(node.name)
+        t = self.lookup(node.name, node)
+        node.type = t
+        return t
 
     # ================= ARRAYS =================
 
@@ -202,7 +261,8 @@ class Checker:
                 self.error(f"array literal mezcla tipos: {first_type} y {t}", node)
                 error_done = True
 
-        return ArrayType(first_type)
+        node.type = ArrayType(first_type)
+        return node.type    
 
     def visit_ArrayAccess(self, node):
         arr = self.visit(node.array)
@@ -215,7 +275,8 @@ class Checker:
             self.error("acceso a algo que no es array", node)
             return None
 
-        return arr.base
+        node.type = arr.base
+        return node.type
 
     # ================= FUNCIONES =================
 
@@ -248,9 +309,38 @@ class Checker:
         return False
 
 
+    def must_return(self, stmts):
+        if not stmts:
+            return False
+
+        last = stmts[-1]
+
+        if isinstance(last, Return):
+            return True
+
+        if isinstance(last, If):
+            if last.else_body:
+                return self.must_return(last.then_body) and self.must_return(last.else_body)
+
+        if isinstance(last, Block):
+            return self.must_return(last.statements)
+
+        return False
+
+
+
+
+
+
+
+
+
 
     def visit_Call(self, node):
-        func = self.lookup(node.name)
+        func = self.lookup(node.name, node)
+
+        if func is None:
+            return None
 
         if not isinstance(func, FunctionType):
             self.error(f"'{node.name}' no es una función", node)
@@ -265,9 +355,11 @@ class Checker:
         for arg, expected in zip(node.args, func.param_types):
             t = self.visit(arg)
             if t != expected:
-                self.error(f"tipo de argumento incorrecto en '{node.name}'", node)
+                self.error(f"argumento de tipo {t} no coincide con {expected}", node)
 
-        return func.return_type
+        node.type = func.return_type
+        return node.type
+        
 
     # ================= OPERADORES =================
 
@@ -284,16 +376,19 @@ class Checker:
             self.error(f"operación inválida: {l} {node.op} {r}", node)
             return None
 
-        return result
+        node.type = result
+        return node.type
 
     def visit_UnaryOp(self, node):
         t = self.visit(node.operand)
 
-        if node.op == "-" and t == IntegerType:
-            return IntegerType
+        if node.op == "-" and t in (IntegerType, FloatType):
+            node.type = t
+            return node.type
 
         if node.op == "!" and t == BooleanType:
-            return BooleanType
+            node.type = BooleanType
+            return node.type
 
         self.error("operador unario inválido", node)
         return None

@@ -184,13 +184,12 @@ class Char(Node):
         self.type = CharType
 
 
-# 🔥 IMPORTANTE (te faltaba esto bien definido)
-class BinaryOp(Node):
-    def __init__(self, op, left, right):
+class BinaryOp:
+    def __init__(self, op, left, right, line=None):
         self.op = op
         self.left = left
         self.right = right
-        self.type = None
+        self.line = line   
 
 
 class UnaryOp(Node):
