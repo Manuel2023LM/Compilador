@@ -8,7 +8,11 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
+<<<<<<< HEAD
 set "VIRTUAL_ENV=C:\Users\Manuel\Downloads\Compilador_Bminor-main\Compilador_Bminor-main\venv"
+=======
+set "VIRTUAL_ENV=C:\Users\Manuel\Documents\lexer.py\bminor\venv"
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 
 if not defined PROMPT set PROMPT=$P$G
 

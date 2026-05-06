@@ -120,9 +120,13 @@ class Checker(Visitor):
 
     def visit_Function(self, node):
         func_type = FunctionType(node.return_type, [p.type for p in node.params])
+<<<<<<< HEAD
 
         if node.body is None:
             return
+=======
+        
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 
         self.push()
         self.current_function = node
@@ -130,9 +134,19 @@ class Checker(Visitor):
         for p in node.params:
             self.define(p.name, p.type)
 
+<<<<<<< HEAD
 
         for stmt in node.body:
            self.visit(stmt)
+=======
+        has_return = False
+
+        if node.body:
+            for stmt in node.body:
+                if isinstance(stmt, Return):
+                    has_return = True
+                self.visit(stmt)
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 
         if node.return_type != VoidType:
             if not self.must_return(node.body):
@@ -163,7 +177,11 @@ class Checker(Visitor):
         if t1 is not None and t2 is not None and t1 != t2:
             self.error(f"no se puede asignar {t2} a {t1}", node)
 
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
     def visit_Return(self, node):
         if not self.current_function:
             self.error("return fuera de función", node)
@@ -173,10 +191,15 @@ class Checker(Visitor):
 
         if node.value:
             val_type = self.visit(node.value)
+<<<<<<< HEAD
             if expected == VoidType:
                 self.error("no se debe retornar valor en función void", node)
             elif val_type is not None and val_type != expected:
                 self.error(f"tipo de retorno incorrecto. return {val_type} en funcion tipo {expected}", node)
+=======
+            if val_type is not None and val_type != expected:
+                self.error("tipo de retorno incorrecto", node)
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         else:
             if expected != VoidType:
                 self.error("falta valor en return", node)

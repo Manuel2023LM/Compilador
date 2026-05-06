@@ -1,5 +1,14 @@
 /* functions of incorrect types */
 
 a: function array [1] integer () = {
+<<<<<<< HEAD
     return 7;
+=======
+    return;
+}
+
+b: function void () = {
+    c: function integer();
+    return 1;
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 }

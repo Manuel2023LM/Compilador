@@ -41,12 +41,20 @@ case "$(uname)" in
     CYGWIN*|MSYS*|MINGW*)
         # transform D:\path\to\venv to /d/path/to/venv on MSYS and MINGW
         # and to /cygdrive/d/path/to/venv on Cygwin
+<<<<<<< HEAD
         VIRTUAL_ENV=$(cygpath 'C:\Users\Manuel\Downloads\Compilador_Bminor-main\Compilador_Bminor-main\venv')
+=======
+        VIRTUAL_ENV=$(cygpath 'C:\Users\Manuel\Documents\lexer.py\bminor\venv')
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         export VIRTUAL_ENV
         ;;
     *)
         # use the path as-is
+<<<<<<< HEAD
         export VIRTUAL_ENV='C:\Users\Manuel\Downloads\Compilador_Bminor-main\Compilador_Bminor-main\venv'
+=======
+        export VIRTUAL_ENV='C:\Users\Manuel\Documents\lexer.py\bminor\venv'
+>>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         ;;
 esac
 
