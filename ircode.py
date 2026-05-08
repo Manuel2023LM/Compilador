@@ -518,6 +518,10 @@ class IRCodeGen(Visitor):
         return out
         
     def visit(self, node: BinOp):
+
+        
+
+
         left_reg = self.visit(node.left)
         left_ty = self.infer_type(node.left)
 
@@ -671,28 +675,14 @@ if __name__ == "__main__":
                         oper="+",
                         left=IntegerLiteral(value=2),
                         right=BinOp(
-                            oper="*",
-                            left=IntegerLiteral(value=3),
-                            right=IntegerLiteral(value=4),
-                            type=INT,
-                        ),
+                        oper="*",
+                        left=IntegerLiteral(value=3),
+                        right=IntegerLiteral(value=4),
+                        type=INT,
+                    ),
                         type=INT,
                     ),
                 ),
-                IfStmt(
-                        test=BinOp(
-                            oper="<",
-                            left=IntegerLiteral(2),
-                            right=IntegerLiteral(5),
-                            type=INT
-                        ),
-                        then_block=Block([
-                            PrintStmt(IntegerLiteral(1))
-                        ]),
-                        else_block=Block([
-                            PrintStmt(IntegerLiteral(0))
-                        ])
-                    ),
                     PrintStmt(StringLiteral("Hola mundo")),
             
                     

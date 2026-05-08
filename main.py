@@ -4,10 +4,7 @@ import os
 from lexer import tokenize
 from parser import parse
 from checker import Checker
-<<<<<<< HEAD
 from rich import print
-=======
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 
 # opcional
 try:
@@ -46,17 +43,10 @@ def run_file(path, run_interpreter=True):
         if checker.errors:
             for err in checker.errors:
                 print(err)   # 🔥 sin duplicar "error:"
-<<<<<<< HEAD
             print("\n[red]Semantic check: failed[/red]")
             return False
 
         print("\n[green]Semantic check: success[/green]")
-=======
-            print("semantic check: failed")
-            return False
-
-        print("semantic check: success")
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
 
         # ========= INTERPRETER =========
         if run_interpreter and HAS_INTERPRETER:
@@ -66,22 +56,13 @@ def run_file(path, run_interpreter=True):
         return True
 
     except SyntaxError as e:
-<<<<<<< HEAD
         print("Error de sintaxis")
         print(f"error: {e}")
-=======
-        print(f"error: {e}")
-        print("semantic check: failed")
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         return False
 
     except Exception as e:
         print(f"error: {e}")
-<<<<<<< HEAD
         print("error inesperado")
-=======
-        print("semantic check: failed")
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         return False
 
 
@@ -148,8 +129,4 @@ def main():
 
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     main()
-=======
-    main()
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782

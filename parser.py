@@ -407,7 +407,6 @@ def parse(source):
         n.line = ln
         return n
 
-<<<<<<< HEAD
     
     def parse_return():
         _, ln = consume("return")
@@ -425,14 +424,6 @@ def parse(source):
         
         consume(";")
         
-=======
-    def parse_return():
-        _, ln = consume("return")
-        val = None
-        if peek() != ";":
-            val = parse_expr()
-        consume(";")
->>>>>>> 7fcdb9504846dd68489daccf7ec8ab3620099782
         n = Return(val)
         n.line = ln
         return n
