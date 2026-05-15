@@ -12,6 +12,8 @@ TOKEN_SPEC = [
     # --- INCREMENT / DECREMENT ---
     ("INC", r'\+\+'),
     ("DEC", r'--'),
+    ("PLUSEQ", r'\+='),
+    ("MINUSEQ", r'-='),
 
     # --- LOGICAL OPS ---
     ("LOGIC", r'&&|\|\|'),

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Optional
-
+from rich import print
 
 class IRRuntimeError(RuntimeError):
 	pass
@@ -43,6 +43,8 @@ class IRInterpreter:
 		self.program = program
 		self.trace = trace
 		self.globals: dict[str, Any] = {}
+		self.global_regs: dict[str, Any] = {}
+		self.global_regs = {}
 		self.data: dict[str, list[int]] = {}
 		self.functions = {fn.name: fn for fn in getattr(program, "functions", [])}
 		self.output: list[str] = []
@@ -53,8 +55,21 @@ class IRInterpreter:
 	# -------------------------------------------------
 	
 	def run(self, name: str = "main", *args):
+
+		if name not in self.functions:
+			print(f"[yellow]Warning:[/yellow] función '{name}' no encontrada")
+			return None
+
+		fn = self.functions[name]
+
+		expected = len(getattr(fn, "params", []))
+
+		if len(args) < expected:
+			args = list(args) + [0] * (expected - len(args))
+
 		return self.call(name, list(args))
-		
+
+
 	def call(self, name: str, args: list[Any]):
 		if name not in self.functions:
 			raise IRRuntimeError(f"Función no encontrada: {name}")
@@ -88,32 +103,143 @@ class IRInterpreter:
 			
 	def _exec_global(self, inst: tuple):
 		op = inst[0]
-		
+
+		# ---------------------------------
+		# DATAS
+		# ---------------------------------
 		if op == "DATAS":
 			_, name, *values = inst
-			self.data[name] = [int(v) for v in values]
+
+			parsed = []
+
+			for v in values:
+
+				if isinstance(v, str) and "," in v:
+					parts = v.split(",")
+					parsed.extend(int(x.strip()) for x in parts)
+				else:
+					parsed.append(int(v))
+
+			self.data[name] = parsed
 			return
-			
-		if op in {"VARI", "VARF", "VARB", "VARS"}:
+
+		# ---------------------------------
+		# Variables globales
+		# ---------------------------------
+		if op in {"VARI", "VARF", "VARB", "VARS", "VARA"}:
 			_, name = inst
-			self.globals.setdefault(name, self._default_for_op(op))
+
+			if op == "ARRAY":
+				_, name, size = inst
+				self.globals[name] = [0] * int(size)
+				return None
+
+			if op == "VARF":
+				self.globals.setdefault(name, 0.0)
+
+			elif op == "VARS":
+				self.globals.setdefault(name, None)
+
+			elif op == "VARA":
+				self.globals.setdefault(name, [])
+
+			else:
+				self.globals.setdefault(name, 0)
+
 			return
-			
-		if op.startswith("MOV"):
-			# Normalmente MOV no aparece en globals, pero lo soportamos
-			# por compatibilidad si el generador lo emite allí.
+
+		# ---------------------------------
+		# Arrays
+		# ---------------------------------
+		if op == "ARRAY":
+			_, name, size = inst
+			self.globals[name] = [0] * int(size)
 			return
-			
-		if op.startswith("STORE"):
-			# En globals, STORE solo funcionaría si antes hubo registros.
-			# Esta versión no mantiene registros globales. Para inicialización
-			# global compleja se recomienda moverla a main o extender esta fase.
-			raise IRRuntimeError(
-				f"Inicialización global con {op} no soportada directamente: {inst}"
-			)
-			
+
+		# ---------------------------------
+		# MOV
+		# ---------------------------------
+		if op in {"MOVI", "MOVF", "MOVB", "MOVS"}:
+			_, value, target = inst
+
+			if op == "MOVF":
+				value = float(value)
+
+			elif op in {"MOVI", "MOVB"}:
+				value = int(value)
+
+			self.global_regs[target] = value
+			return
+
+		# ---------------------------------
+		# NEG
+		# ---------------------------------
+		if op in {"NEGI", "NEGF"}:
+			_, source, target = inst
+
+			value = self.global_regs.get(source, 0)
+
+			if op == "NEGI":
+				self.global_regs[target] = -int(value)
+			else:
+				self.global_regs[target] = -float(value)
+
+			return
+
+
+		# ---------------------------------
+		# ADDR
+		# ---------------------------------
+		if op == "ADDR":
+			_, name, target = inst
+
+			if name not in self.data:
+				raise IRRuntimeError(f"Bloque de datos no encontrado: {name}")
+
+			self.global_regs[target] = name
+			return
+
+		# ---------------------------------
+		# MOVA
+		# ---------------------------------
+		if op == "MOVA":
+			_, arrname, target = inst
+
+			if arrname not in self.globals:
+				raise IRRuntimeError(f"Array no encontrado: {arrname}")
+
+			self.global_regs[target] = self.globals[arrname]
+			return
+
+		# ---------------------------------
+		# STORE
+		# ---------------------------------
+		if op in {"STOREI", "STOREF", "STOREB", "STORES", "STOREA"}:
+			_, source, name = inst
+
+			if source in self.global_regs:
+				value = self.global_regs[source]
+			else:
+				value = source
+
+			self.globals[name] = value
+			return
+
+		# ---------------------------------
+		# LOAD
+		# ---------------------------------
+		if op in {"LOADI", "LOADF", "LOADB", "LOADS", "LOADA"}:
+			_, name, target = inst
+
+			if name not in self.globals:
+				raise IRRuntimeError(f"Global no definido: {name}")
+
+			self.global_regs[target] = self.globals[name]
+			return
+
 		raise IRRuntimeError(f"Instrucción global no soportada: {inst}")
-		
+
+
 	def _default_for_op(self, op: str):
 		if op.endswith("F"):
 			return 0.0
@@ -157,13 +283,39 @@ class IRInterpreter:
 			return None
 			
 		op = inst[0]
+
+		if op in {"NEGI", "NEGF"}:
+			_, source, target = inst
+
+			value = self._value(frame, source)
+
+			if op == "NEGI":
+				frame.regs[target] = -int(value)
+			else:
+				frame.regs[target] = -float(value)
+
+			return None
 		
 		# -------------------------
 		# Datos y direcciones
 		# -------------------------
 		if op == "DATAS":
 			_, name, *values = inst
-			self.data[name] = [int(v) for v in values]
+
+			parsed = []
+
+			for v in values:
+
+				if isinstance(v, str) and "," in v:
+
+					parts = v.split(",")
+
+					parsed.extend(int(x.strip()) for x in parts)
+
+				else:
+					parsed.append(int(v))
+
+			self.data[name] = parsed
 			return None
 			
 		if op == "ADDR":
@@ -176,31 +328,83 @@ class IRInterpreter:
 		# -------------------------
 		# Variables locales/globales
 		# -------------------------
+		# -------------------------
+		# Variables locales/globales
+		# -------------------------
 		if op in {"ALLOCI", "ALLOCF", "ALLOCB", "ALLOCS"}:
 			_, name = inst
-			# No borrar parámetros ya inicializados.
+
 			frame.locals.setdefault(name, self._default_for_op(op))
+
 			return None
-			
+
 		if op in {"VARI", "VARF", "VARB", "VARS"}:
 			_, name = inst
+
 			self.globals.setdefault(name, self._default_for_op(op))
+
 			return None
-			
+
+		# ---------------------------------
+		# LOAD normales
+		# ---------------------------------
 		if op in {"LOADI", "LOADF", "LOADB", "LOADS"}:
+
 			_, name, target = inst
+
 			frame.regs[target] = self._load_var(frame, name)
+
 			return None
-			
-		if op in {"STOREI", "STOREF", "STOREB", "STORES"}:
+
+		# ---------------------------------
+		# LOADA
+		# ---------------------------------
+		if op == "LOADA":
+
+			# LOADA arr, index, target
+			if len(inst) == 4:
+
+				_, name, index, target = inst
+
+				idx = self._value(frame, index)
+
+				arr = self._load_var(frame, name)
+
+				frame.regs[target] = arr[idx]
+
+				return None
+
+			# LOADA var, target
+			elif len(inst) == 3:
+
+				_, name, target = inst
+
+				frame.regs[target] = self._load_var(frame, name)
+
+				return None
+
+		if op in {"STOREI", "STOREF", "STOREB", "STORES", "STOREA"}:
+
 			_, source, name = inst
+
 			self._store_var(frame, name, self._value(frame, source))
+
 			return None
-			
+
+
+
+
+
 		# -------------------------
 		# Literales
 		# -------------------------
-		if op in {"MOVI", "MOVF", "MOVB", "MOVS"}:
+		if op in {"MOVI", "MOVF", "MOVB", "MOVS", "MOVA"}:
+
+			if op == "MOVA":
+				_, arrname, target = inst
+
+				frame.regs[target] = self.globals[arrname]
+				return None
 			_, value, target = inst
 			if op == "MOVF":
 				value = float(value)
@@ -410,21 +614,50 @@ class IRInterpreter:
 		raise IRRuntimeError(f"Comparador no soportado: {op}")
 		
 	def _read_c_string(self, name_or_values) -> str:
+
 		if isinstance(name_or_values, str):
+
 			if name_or_values not in self.data:
-				raise IRRuntimeError(f"Cadena no encontrada: {name_or_values}")
+				raise IRRuntimeError(
+					f"Cadena no encontrada: {name_or_values}"
+				)
+
 			values = self.data[name_or_values]
+
 		else:
 			values = name_or_values
-			
-		chars: list[str] = []
-		for b in values:
-			b = int(b)
+
+		chars = []
+
+		i = 0
+
+		while i < len(values):
+
+			b = int(values[i])
+
 			if b == 0:
 				break
+
+			# \n
+			if b == 92 and i + 1 < len(values):
+
+				nxt = int(values[i + 1])
+
+				if nxt == 110:
+					chars.append("\n")
+					i += 2
+					continue
+
+				elif nxt == 116:
+					chars.append("\t")
+					i += 2
+					continue
+
 			chars.append(chr(b))
-		return bytes("".join(chars), "latin1").decode("utf-8", errors="replace")
-		
+
+			i += 1
+
+		return "".join(chars)
 		
 @dataclass
 class _Return:
@@ -444,9 +677,10 @@ if __name__ == "__main__":
 	from ircode  import IRCodeGen
 	
 	if sys.platform != 'ios':
-		if len(sys.argv) != 2:
-			raise SystemExit("Usage: python parser_v2.py <filename>")
-		filename = sys.argv[1]
+		if len(sys.argv) < 2:
+			raise SystemExit("Usage: python irinterp.py <filename> [--trace]")
+
+		filename = sys.argv[1]	
 	else:
 		from file_picker import file_picker_dialog
 		filename = file_picker_dialog(
@@ -462,10 +696,33 @@ if __name__ == "__main__":
 		if errors_detected():
 			raise SystemExit("Hay errores de análisis; no se ejecuta IR.")
 		
-		c = Checker.check(ast)
-		if not c.ok():
-			raise SystemExit("El checker reportó errores; no se ejecuta IR.")
-		
+		# ============================================================
+		# CHECKER
+		# ============================================================
+
+		checker = Checker()
+		checker.visit(ast)
+
+		if checker.errors:
+
+			print("\n[bold white on red] SEMANTIC CHECK FAILED [/bold white on red]\n")
+
+			for err in checker.errors:
+				print(f"[bold red]• {err}[/bold red]")
+
+			raise SystemExit(
+				"El checker reportó errores; no se ejecuta IR."
+			)
+
+		print("[bold green]✓ Semantic check: SUCCESS[/bold green]")
+
+
 		ir = IRCodeGen.generate(ast)
-		interp = IRInterpreter(ir, trace=True)
-		interp.run("main")
+		
+		DEBUG = "--trace" in sys.argv
+
+		interp = IRInterpreter(ir, trace=DEBUG)
+		if any(fn.name == "main" for fn in ir.functions):
+			interp.run("main")
+		else:
+			print("[yellow]Warning:[/yellow] función 'main' no encontrada")	

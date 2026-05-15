@@ -14,7 +14,7 @@ def tokenize(src):
         ("STRING", r'"[^"]*"'),
         ("CHAR", r"'(\\.|[^\\'])+'"),
         ("ID", r'[A-Za-z_][A-Za-z0-9_]*'),
-        ("OP", r'==|!=|<=|>=|<|>|\+|-|\*|/|=|!|%'),
+        ("OP", r'\+=|-=|==|!=|<=|>=|<|>|\+|-|\*|/|=|!|%'),
         ("SYM", r'[{}()\[\],;:]'),
         ("SKIP", r'[ \t]+'),
         ("NEWLINE", r'\n'),
@@ -263,17 +263,35 @@ def parse(source):
     def parse_assignment():
         target = parse_primary()
 
-        if peek() == "=":
-            _, ln = consume("=")
+        # =  +=  -=
+        if peek() in ("=", "+=", "-="):
+
+            op, ln = consume()
+
             val = parse_expr()
             consume(";")
-            n = Assignment(target, val)
+
+            if op == "=":
+                n = Assignment(target, val)
+
+            elif op == "+=":
+                binop = BinaryOp("+", target, val)
+                binop.line = ln
+                n = Assignment(target, binop)
+
+            elif op == "-=":
+                binop = BinaryOp("-", target, val)
+                binop.line = ln
+                n = Assignment(target, binop)
+
             n.line = ln
             return n
 
+        # ++
         if peek() == "++":
             _, ln = consume("++")
             consume(";")
+
             one = Number(1)
             one.line = ln
 
@@ -282,13 +300,13 @@ def parse(source):
 
             n = Assignment(target, binop)
             n.line = ln
-
-            
             return n
 
+        # --
         if peek() == "--":
             _, ln = consume("--")
             consume(";")
+
             one = Number(1)
             one.line = ln
 
@@ -297,10 +315,10 @@ def parse(source):
 
             n = Assignment(target, binop)
             n.line = ln
-
             return n
 
         raise SyntaxError(f"Asignación inválida en la línea {line()}")
+
 
     def parse_if():
         
@@ -363,10 +381,27 @@ def parse(source):
         if peek() != ")":
             target = parse_primary()
 
-            if peek() == "=":
-                consume("=")
+            if peek() in ("=", "+=", "-="):
+
+                op = consume()[0]
                 val = parse_expr()
-                update = Assignment(target, val)
+
+                if op == "=":
+                    update = Assignment(target, val)
+
+                elif op == "+=":
+                    binop = BinaryOp("+", target, val)
+                    binop.line = ln
+
+                    update = Assignment(target, binop)
+
+                elif op == "-=":
+                    binop = BinaryOp("-", target, val)
+                    binop.line = ln
+
+                    update = Assignment(target, binop)
+
+                update.line = ln
 
             elif peek() == "++":
                 consume("++")
@@ -393,6 +428,25 @@ def parse(source):
                 update = Assignment(target, binop)
                 update.line = ln
 
+            elif peek() == "+=":
+                consume("+=")
+                val = parse_expr()
+
+                binop = BinaryOp("+", target, val)
+                binop.line = ln
+
+                update = Assignment(target, binop)
+                update.line = ln   
+
+            elif peek() == "-=":
+                consume("-=")
+                val = parse_expr()
+
+                binop = BinaryOp("-", target, val)
+                binop.line = ln
+
+                update = Assignment(target, binop)
+                update.line = ln
             
 
         consume(")")
@@ -464,7 +518,7 @@ def parse(source):
             raise SyntaxError(f"Declaración inválida en la línea {line()}")
 
         # assignment
-        if peek2() == "=" or peek2() in ("++", "--"):
+        if peek2() in ("=", "+=", "-=", "++", "--"):
             return parse_assignment()
 
         # 🔥 fallback expresión

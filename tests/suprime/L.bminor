@@ -1,0 +1,17 @@
+main: function integer () = {
+     x: integer = 2 + 3 * 4;
+     y: integer = x + 0;
+     z: integer = y * 1;
+
+    if (true) {
+        print 111;
+    } else {
+        print 222;
+    }
+
+    while (false) {
+        print 999;
+    }
+
+    return 0;
+}

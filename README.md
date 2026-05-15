@@ -1,224 +1,418 @@
-# Analizador Semántico B-Minor
-
-## Descripción
-
-Analizador Semántico para B-Minor
-📌 Descripción
-
-Este proyecto implementa un analizador semántico para el lenguaje B-Minor, desarrollado en Python como parte del curso de Compiladores.
-
-El analizador semántico recibe un AST (Abstract Syntax Tree) generado por el parser y verifica la correcta semántica del programa, incluyendo:
-
-uso correcto de variables,
-manejo de tipos,
-verificación de funciones,
-control de alcances léxicos,
-validación de expresiones.
----
-
-## Funcionalidades
-
-* Tabla de símbolos con **alcance léxico**
-* Chequeo de:
-
-  * variables no declaradas
-  * redeclaraciones
-  * asignaciones incompatibles
-* Validación de tipos en:
-
-  * expresiones aritméticas, relacionales y lógicas
-  * condiciones (`if`, `while`, `for`)
-
-* Verificación de funciones:
-  * número de argumentos
-  * tipos de argumentos
-  * tipo de retorno
-
-* Soporte para **arreglos**:
-  * índice entero
-  * consistencia de tipos
+# 🚀 Proyecto 4 — Generación de Código Intermedio (IR) para B-Minor
 
 ---
 
+# 📌 **Descripción**
 
-  # Chequeos semánticos implementados
+Este proyecto implementa un **compilador para el lenguaje B-Minor**, desarrollado en Python como parte del curso de Compiladores.
 
-# Variables
-Uso de variables no declaradas
-Redeclaración en el mismo scope
-Asignaciones incompatibles
+El compilador realiza el flujo completo de compilación:
 
-# Tipos y expresiones
-Operadores aritméticos (+ - * / %)
-Operadores relacionales (< > <= >=)
-Operadores lógicos (&& || !)
-Validación de tipos en expresiones
-
-
- # Funciones
-
-Verificación de número de argumentos
-Verificación de tipos de argumentos
-Validación del tipo de retorno
-Verificación de retorno en funciones no void
-
- # Arreglos
-Índices deben ser enteros
-Acceso válido a estructuras tipo array
-Consistencia de tipos en arreglos
-
-
-
-## Estructura
+## 📐 **Estructura del Proyecto**
 
 ```text
-bminor/
-├── lexer.py
-├── parser.py
-├── model.py
-├── symtab.py
-├── checker.py
-├── main.py
-└── tests/
-    ├── good/
-    └── bad/
-```
+Código Fuente
+    ↓
+Lexer
+    ↓
+Parser
+    ↓
+Checker Semántico
+    ↓
+AST
+    ↓
+Generación de IR
+    ↓
+Intérprete IR
 
-hay carpetas y archivos extra como interpreter (la idea era hacer los prints de los programas pero fallo) y vizualizer y typesy en la carpeta bminor que no son parte del proyecto y estos se hicieros para mejorar el trabajo del analizador semántico pero las pruebas fallaron entoces el proyecto funciona normalmente se dejan para cuando vengan los siguientes proyectos arreglarlos y ponerlos a funcionar correctamente
+
+## 🎯 **Objetivo del Proyecto**
+
+El objetivo principal consiste en transformar el AST generado por el parser en un Código Intermedio (IR) basado en instrucciones de tres direcciones, para posteriormente ejecutarlo mediante un intérprete propio.
+
 ---
 
-Diseño del Analizador Semántico
-# Patrón Visitor
+## ⚙️ **Funcionalidades Implementadas**
 
-El recorrido del AST se implementa usando el patrón Visitor con la librería multimethod.
+### 🧠 **Frontend del Compilador**
 
-Se utiliza un enfoque híbrido:
+#### 🔹 **Lexer**
 
-Clase base Visitor con multimeta
-Método visit() que realiza despacho dinámico
-Métodos específicos como:
-visit_If
-visit_Assignment
-visit_BinaryOp
+Convierte el código fuente en tokens válidos del lenguaje B-Minor.
 
-# Tabla de símbolos
+**Características:**
+- Reconocimiento de keywords
+- Operadores
+- Identificadores
+- Números
+- Strings
+- Caracteres
+- Comentarios
 
-La tabla de símbolos (Symtab) maneja:
+#### 🔹 **Parser**
 
-alcances anidados (scope chaining),
-inserción de variables y funciones,
-búsqueda respetando alcance léxico,
-detección de redeclaraciones.
+Construye el AST (Abstract Syntax Tree) utilizando la gramática del lenguaje.
 
-Cada símbolo almacena:
+**Soporta:**
+- Expresiones
+- Declaraciones
+- Funciones
+- Arreglos
+- Ciclos
+- Condicionales
+- Llamadas a función
 
-nombre
-tipo
-contexto de declaración
+#### 🔹 **Checker Semántico**
 
- # Sistema de tipos
+Realiza validaciones semánticas sobre el AST.
 
-El lenguaje es fuertemente tipado.
+✔️ **Validaciones Implementadas:**
+- Variables declaradas
+- Redeclaraciones
+- Tipos compatibles
+- Funciones
+- Parámetros
+- Retornos
+- Scope léxico
+- Arreglos
+- Expresiones válidas
 
-Tipos soportados:
+---
 
-integer
-float
-boolean
-string
-char
-void
-array[T]
+### 🧾 **Generación de Código Intermedio (IR)**
 
- # Manejo de errores
-Los errores se acumulan (no se detiene en el primero)
-Cada error incluye:
-descripción clara
-número de línea
+El compilador transforma el AST en un IR de bajo nivel.
+
+✨ **Características del IR:**
+- Código de tres direcciones
+- Registros temporales (R1, R2, R3, ...)
+- Labels para control de flujo
+- Soporte para funciones
+- Soporte para arreglos
+- Strings globales
+- Variables locales y globales
+- Instrucciones tipadas
+
+#### 🧩 **Instrucciones IR Implementadas**
+
+##### 📦 **Variables y Memoria**
+- ALLOCI
+- ALLOCF
+- ALLOCB
+- ALLOCS
+- LOADI
+- LOADF
+- LOADB
+- LOADS
+- STOREI
+- STOREF
+- STOREB
+- STORES
+
+##### 🔢 **Literales**
+- MOVI
+- MOVF
+- MOVB
+- MOVS
+- MOVA
+
+##### ➗ **Operaciones Aritméticas**
+- ADDI
+- SUBI
+- MULI
+- DIVI
+- ADDF
+- SUBF
+- MULF
+- DIVF
+
+##### ⚖️ **Comparaciones**
+- CMPI
+- CMPF
+- CMPB
+- CMPS
+
+##### 🔀 **Control de Flujo**
+- LABEL
+- BRANCH
+- CBRANCH
+- PHI
+
+##### 📞 **Funciones**
+- CALL
+- RET
+
+##### 📊 **Arreglos**
+- ARRAY
+- LOADARR
+- STOREARR
+- LOADA
+- STOREA
+
+##### 🧵 **Strings**
+- DATAS
+- ADDR
+- PRINTS
+
+---
+
+### 🧠 **Intérprete IR**
+
+El archivo irinterp.py ejecuta el código intermedio generado por el compilador.
+
+⚙️ **Funcionalidades del Intérprete:**
+- Ejecución de funciones
+- Manejo de registros
+- Variables locales y globales
+- Control de flujo
+- Llamadas recursivas
+- Operaciones aritméticas
+- Comparaciones
+- Manejo de arreglos
+- Soporte para strings
+- Impresión en consola
+- Modo debug (--trace)
+
+#### 🐞 **Modo TRACE**
+
+El intérprete incluye un modo de depuración que permite visualizar:
+
+- Instrucciones ejecutadas
+- Registros
+- Flujo de ejecución
+- Labels
+- Llamadas a funciones
 
 Ejemplo:
 
-error: símbolo 'x' no definido en la línea 8
-error: no se puede asignar boolean a integer en la línea 12
+python irinterp.py tests/suprime/suma.bminor --trace
 
+---
 
-## Requisitos
+## 🏗️ **Diseño del Compilador**
 
-* Python 3
-* Librería:
+### 🧭 **Patrón Visitor**
 
-```bash
-pip install multimethod rich graphviz 
+El AST se recorre utilizando el patrón Visitor mediante multimethod.
+
+**Ejemplo:**
+- `visit_If()`
+- `visit_Assignment()`
+- `visit_BinaryOp()`
+- `visit_FunctionCall()`
+
+### 📚 **Tabla de Símbolos**
+
+La tabla de símbolos (Symtab) maneja:
+
+- Scopes anidados
+- Variables
+- Funciones
+- Búsqueda léxica
+- Redeclaraciones
+
+**Cada símbolo almacena:**
+- Nombre
+- Tipo
+- Contexto de declaración
+- Scope
+
+### 🧬 **Sistema de Tipos**
+
+El lenguaje es fuertemente tipado.
+
+✔️ **Tipos Soportados:**
+- `integer`
+- `float`
+- `boolean`
+- `char`
+- `string`
+- `void`
+- `array[T]`
+
+### ❗ **Manejo de Errores**
+
+El compilador acumula errores y no se detiene en el primero.
+
+**Cada error incluye:**
+- Descripción clara
+- Línea del código
+
+**Ejemplo:**
+```
+error: variable 'x' no definida en línea 8
+error: tipo incompatible en línea 12
 ```
 
 ---
 
-## Entorno virtual
+## 🗂️ **Estructura del Proyecto**
 
-El proyecto fue ejecutado usando un entorno virtual (`venv`) con todas las dependencias instaladas.
+Compilador_Bminor/
+│
+├── lexer.py
+├── parser.py
+├── checker.py
+├── ircode.py
+├── irinterp.py
+├── main.py
+├── model.py
+├── model2.py
+├── symtab.py
+├── errors.py
+├── typesys.py
+├── visualizer.py
+│
+└── tests/
+    ├── good/
+    ├── bad/
+    └── suprime/
 
-Creación y activación:
+---
+
+## 🧪 **Archivos Auxiliares**
+
+### ⚠️ **Archivos no oficiales del Proyecto 4**
+
+Estos archivos fueron utilizados para pruebas, depuración o mejoras experimentales:
+
+- `interpreter.py`
+- `visualizer.py`
+- `typesys.py`
+
+Actualmente no forman parte del núcleo obligatorio del proyecto, pero se mantienen para futuras mejoras y siguientes proyectos.
+
+---
+
+## 📦 **Requisitos**
+
+### 🐍 **Python**
+- Python 3.x
+
+### 📚 **Librerías Necesarias**
+
+```bash
+pip install multimethod rich graphviz
+```
+
+### 🧪 **Entorno Virtual**
+
+El proyecto fue ejecutado utilizando venv.
+
+**Crear entorno virtual:**
 
 ```bash
 python -m venv venv
-venv\Scripts\activate   # Windows
 ```
 
-## Ejecución
+**Activar entorno virtual (Windows):**
 
 ```bash
-para ejecutar todos los tests: good y bad se usan los siguientes comandos
-python main.py tests/good
-python main.py tests/bad
+venv\Scripts\activate
+```
 
-si se quiere correr un solo archivo se usa el siguiente comando 
-python main.py tests/good/good0.bminor 
+---
+
+## ▶️ **Ejecución**
+
+### ✅ **Ejecutar todos los tests GOOD**
+```bash
+python main.py tests/good
+```
+
+### ❌ **Ejecutar todos los tests BAD**
+```bash
+python main.py tests/bad
+```
+
+### 🚀 **Ejecutar tests del Proyecto 4**
+```bash
+python main.py tests/suprime
+```
+
+### 📄 **Ejecutar un archivo individual**
+```bash
+python main.py tests/good/good0.bminor
 python main.py tests/bad/bad3.bminor
 ```
----
 
-## Salida esperada
-
-Programa correcto:
-
-```text
-semantic check: success
+### 🔬 **Ejecutar intérprete IR directamente**
+```bash
+python irinterp.py tests/suprime/suma.bminor
+python irinterp.py "tests/suprime/primes (1).bminor" 
 ```
 
-Programa con errores:
-
-```text
-error: descripción del error en la línea X
-semantic check: failed
-```
----
-
-## Implementación
-
-* Recorrido del AST mediante patrón **Visitor**
-* Uso de `multimethod` (implementación híbrida)
-* Tipos anotados en los nodos (`node.type`)
-* Manejo de errores acumulativo (no se detiene en el primero)
----
-
-## Pruebas
-
-* `tests/good/`: programas válidos
-* `tests/bad/`: programas con errores
-
-Resultado:
-
-```text
-10/10 correctos
+### 🐛 **Ejecutar con TRACE**
+```bash
+python irinterp.py tests/suprime/suma.bminor --trace
+python irinterp.py "tests/suprime/primes (1).bminor" --trace
 ```
 
 ---
 
-## Autores
+## 📤 **Salida Esperada**
 
-Manuel Alejandro Gomez Briceño 
-Fernando Caicedo 
-Curso de Compiladores
+### ✔️ **Programa Correcto**
+```
+✓ Semantic check: SUCCESS
+```
+
+### ❌ **Programa con Errores**
+```
+SEMANTIC CHECK FAILED
+```
+
+---
+
+## 🧪 **Estado Actual del Proyecto**
+
+### ✅ **Implementado**
+- Lexer
+- Parser
+- Checker Semántico
+- AST
+- Generación de IR
+- Intérprete IR
+- Funciones
+- Recursión
+- Ciclos
+- Condicionales
+- Arreglos
+- Strings básicos
+- Debug TRACE
+
+### ⚠️ **En Desarrollo**
+- Optimización IR
+- Mejoras del intérprete
+- Strings avanzados
+- Debugger avanzado
+- Visualización gráfica del AST
+- Optimizaciones de registros
+
+---
+
+## 👨‍💻 **Autores**
+- Manuel Alejandro Gómez Briceño
+- Fernando Caicedo
+- Juan Fernando Pulgarín
+
+## 🎓 **Curso**
+**Compiladores**
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
