@@ -1,0 +1,12 @@
+main: function integer () = {
+
+    x: integer = 2 + 3 * 4;
+
+    if (x==1) {
+        print 111;
+    } else {
+        print 222;
+    }
+
+    return 0;
+}

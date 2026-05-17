@@ -1,8 +1,28 @@
 # ================= BASE NODE =================
 
 class Node:
+
     def accept(self, visitor):
         return visitor.visit(self)
+
+    def __repr__(self):
+
+        attrs = []
+
+        for k, v in self.__dict__.items():
+
+            # evitar imprimir cosas enormes
+            if isinstance(v, list):
+
+                attrs.append(f"{k}=[...]")
+
+            else:
+                attrs.append(f"{k}={v}")
+
+        return f"{type(self).__name__}({', '.join(attrs)})"
+
+    __str__ = __repr__
+
 
 
 # ================= PROGRAM =================
@@ -219,3 +239,6 @@ class ArrayAccess(Node):
         self.array = array
         self.index = index
         self.type = None
+
+
+

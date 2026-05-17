@@ -27,13 +27,20 @@
 # UTILIDADES
 # =========================================================
 
+from rich import print
+from rich.table import Table
+
+
+
 def is_register(x):
     return isinstance(x, str) and x.startswith("R")
 
 
 def is_number(x):
-    return isinstance(x, (int, float))
-
+    return (
+        isinstance(x, (int, float))
+        and not isinstance(x, bool)
+    )
 
 def replace_operand(value, constants):
     """
@@ -81,12 +88,14 @@ def peephole(instrs):
             target = instr[3]
 
             if b == 0:
-                movop = "MOVF" if isinstance(a, float) else "MOVI"
+                movop = "MOVF" if op.endswith("F") else "MOVI"
                 optimized.append((movop, a, target))    
                 continue
 
             if a == 0:
-                optimized.append(("MOVI", b, target))
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, b, target))
                 continue
 
         # -------------------------------------------------
@@ -100,7 +109,10 @@ def peephole(instrs):
             target = instr[3]
 
             if b == 0:
-                optimized.append(("MOVI", a, target))
+
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, a, target))
                 continue
 
         # -------------------------------------------------
@@ -114,16 +126,23 @@ def peephole(instrs):
             target = instr[3]
 
             if b == 1:
-                optimized.append(("MOVI", a, target))
+
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, a, target))
                 continue
 
             if a == 1:
-                optimized.append(("MOVI", b, target))
-                continue
 
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, b, target))
+                continue
             # x * 0 -> 0
             if a == 0 or b == 0:
-                optimized.append(("MOVI", 0, target))
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, 0, target))
                 continue
 
         # -------------------------------------------------
@@ -137,7 +156,10 @@ def peephole(instrs):
             target = instr[3]
 
             if b == 1:
-                optimized.append(("MOVI", a, target))
+
+                movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                optimized.append((movop, a, target))
                 continue
 
         optimized.append(instr)
@@ -163,14 +185,14 @@ def constant_propagation(instrs):
         # MOVI constante
         # -------------------------------------------------
 
-        if op == "MOVI":
+        if op in ("MOVI", "MOVF", "MOVB"):
 
             value = instr[1]
             target = instr[2]
 
             value = replace_operand(value, constants)
 
-            optimized.append(("MOVI", value, target))
+            optimized.append((op, value, target))
 
             if is_number(value):
                 constants[target] = value
@@ -230,7 +252,9 @@ def constant_propagation(instrs):
 
                     if result is not None:
 
-                        optimized.append(("MOVI", result, target))
+                        movop = "MOVF" if op.endswith("F") else "MOVI"
+
+                        optimized.append((movop, result, target))
                         constants[target] = result
                         continue
 
@@ -284,7 +308,7 @@ def constant_propagation(instrs):
 
                 continue
 
-            optimized.append(("CMPI", cmpop, a, b, target))
+            optimized.append((op, cmpop, a, b, target))
 
             constants.pop(target, None)
 
@@ -462,6 +486,7 @@ def is_pure_instruction(op):
     return (
         op in (
             "MOVI", "MOVF", "MOVB",
+            "ADDR",
 
             "ADDI", "SUBI", "MULI", "DIVI",
             "ADDF", "SUBF", "MULF", "DIVF",
@@ -482,7 +507,7 @@ def get_defined_register(instr):
     # instrucciones de 3 operandos
     if op in (
         "MOVI", "MOVF", "MOVB",
-        "LOADI", "LOADF", "LOADB"
+        "LOADI", "LOADF", "LOADB", "LOADS"
     ):
 
         target = instr[-1]
@@ -492,6 +517,7 @@ def get_defined_register(instr):
 
     # instrucciones de 4 operandos
     elif op in (
+        "ADDR",
         "ADDI", "SUBI", "MULI", "DIVI",
         "ADDF", "SUBF", "MULF", "DIVF",
         "AND", "OR", "XOR"
@@ -611,8 +637,12 @@ def remove_redundant_load_store(instrs):
 
                 if reg == store_reg:
 
+                    suffix = a[0][-1]
+
+                    storeop = f"STORE{suffix}"
+
                     optimized.append(
-                        ("STOREI", load_src, store_dst)
+                        (storeop, load_src, store_dst)
                     )
 
                     i += 2
@@ -679,9 +709,7 @@ def remove_dead_alloc(instrs):
 
             used_vars.add(instr[1])
 
-        elif op.startswith("STORE"):
-
-            used_vars.add(instr[2])
+    
 
     optimized = []
 
@@ -689,7 +717,7 @@ def remove_dead_alloc(instrs):
 
         op = instr[0]
 
-        if op == "ALLOCI":
+        if op.startswith("ALLOC"):
 
             varname = instr[1]
 
@@ -741,10 +769,32 @@ def optimize_function(fn, verbose=False):
 
         new_len = len(instrs)
 
-        print(
-            f"[O2] {fn.name}: "
-            f"{old_len} -> {new_len} instrucciones"
+        if old_len > 0:
+            reduction = 100 * (old_len - new_len) / old_len
+        else:
+            reduction = 0
+
+        table = Table(
+            title="[bold cyan]Optimizacion O2[/bold cyan]",
+            show_lines=True,
+            border_style="bright_blue"
         )
+
+        table.add_column("Funcion", style="cyan")
+        table.add_column("Antes", style="yellow")
+        table.add_column("Despues", style="green")
+        table.add_column("Reducidas", style="red")
+        table.add_column("Reduccion", style="magenta")
+
+        table.add_row(
+            fn.name,
+            str(old_len),
+            str(new_len),
+            str(old_len - new_len),
+            f"{reduction:.1f}%"
+        )
+
+        print(table)
 
     return fn
 # =========================================================

@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from rich import print
-
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from rich.panel import Panel
 class IRRuntimeError(RuntimeError):
 	pass
 	
@@ -48,6 +51,8 @@ class IRInterpreter:
 		self.data: dict[str, list[int]] = {}
 		self.functions = {fn.name: fn for fn in getattr(program, "functions", [])}
 		self.output: list[str] = []
+		self.last_regs = {}
+		self.call_stack = []
 		self._load_globals()
 		
 	# -------------------------------------------------
@@ -91,8 +96,13 @@ class IRInterpreter:
 		for (pname, _pty), value in zip(params, args):
 			frame.locals[pname] = value
 			
-		return self._execute_frame(frame)
-		
+		self.call_stack.append(name)
+
+		result = self._execute_frame(frame)
+
+		self.call_stack.pop()
+
+		return result
 	# -------------------------------------------------
 	# Carga de datos globales
 	# -------------------------------------------------
@@ -247,6 +257,83 @@ class IRInterpreter:
 			return None
 		return 0
 		
+	def _trace_state(self, frame: Frame, pc: int, inst: tuple):
+
+		op = inst[0]
+
+		# ========= instrucción bonita =========
+
+		parts = [f"[bold cyan]{op}[/bold cyan]"]
+
+		for x in inst[1:]:
+
+			if isinstance(x, str) and x.startswith("R"):
+				parts.append(f"[bold yellow]{x}[/bold yellow]")
+
+			elif isinstance(x, str) and x.startswith("L"):
+				parts.append(f"[bold green]{x}[/bold green]")
+
+			elif isinstance(x, (int, float)):
+				parts.append(f"[bold magenta]{x}[/bold magenta]")
+
+			else:
+				parts.append(str(x))
+
+		instr_text = ", ".join(parts)
+
+		# ========= registros =========
+
+		regs_text = ""
+
+		if frame.regs:
+
+			regs = []
+
+			for k, v in sorted(frame.regs.items()):
+				regs.append(
+					f"[yellow]{k}[/yellow]=[white]{v}[/white]"
+				)
+
+			regs_text = "  ".join(regs)
+
+		else:
+			regs_text = "[dim]vacío[/dim]"
+
+		# ========= locals =========
+
+		locals_text = ""
+
+		if frame.locals:
+
+			locs = []
+
+			for k, v in sorted(frame.locals.items()):
+				locs.append(
+					f"[green]{k}[/green]=[white]{v}[/white]"
+				)
+
+			locals_text = "  ".join(locs)
+
+		else:
+			locals_text = "[dim]vacío[/dim]"
+
+		# ========= panel =========
+
+		text = (
+			f"[bold white]Función:[/bold white] {frame.name}\n"
+			f"[bold white]PC:[/bold white] {pc:04d}\n"
+			f"[bold white]Instr:[/bold white] {instr_text}\n\n"
+			f"[bold white]Regs:[/bold white]\n{regs_text}\n\n"
+			f"[bold white]Locals:[/bold white]\n{locals_text}"
+		)
+
+		print(
+			Panel(
+				text,
+				title="[bold bright_magenta]TRACE[/bold bright_magenta]",
+				border_style="bright_blue"
+			)
+		)	
 	# -------------------------------------------------
 	# Ejecución
 	# -------------------------------------------------
@@ -260,7 +347,7 @@ class IRInterpreter:
 			frame.pc += 1
 			
 			if self.trace:
-				print(f"[TRACE] {frame.name}:{current_pc:04d} {inst}")
+				self._trace_state(frame, current_pc, inst)
 				
 			try:
 				result = self._dispatch(frame, inst)
@@ -565,6 +652,82 @@ class IRInterpreter:
 	# Helpers
 	# ------------------------------------------------------------
 	
+
+	def _format_instruction(self, inst):
+
+		op = inst[0]
+
+		CONTROL = {
+			"BRANCH",
+			"CBRANCH",
+			"LABEL"
+		}
+
+		ARITH = {
+			"ADDI",
+			"SUBI",
+			"MULI",
+			"DIVI",
+			"ADDF",
+			"SUBF",
+			"MULF",
+			"DIVF"
+		}
+
+		LOAD = {
+			"LOADI",
+			"STOREI",
+			"LOADF",
+			"STOREF"
+		}
+
+		PRINT = {
+			"PRINTI",
+			"PRINTF",
+			"PRINTS"
+		}
+
+		if op in CONTROL:
+			color = "bright_red"
+
+		elif op in ARITH:
+			color = "bright_green"
+
+		elif op in LOAD:
+			color = "bright_blue"
+
+		elif op in PRINT:
+			color = "bright_magenta"
+
+		else:
+			color = "bright_cyan"
+
+		parts = [f"[bold {color}]{op}[/bold {color}]"]
+
+		for x in inst[1:]:
+
+			if isinstance(x, str) and x.startswith("R"):
+
+				parts.append(
+					f"[bold bright_yellow]{x}[/bold bright_yellow]"
+				)
+
+			elif isinstance(x, str) and x.startswith("L"):
+
+				parts.append(
+					f"[bold bright_green]{x}[/bold bright_green]"
+				)
+
+			else:
+				parts.append(str(x))
+
+		return ", ".join(parts)
+
+
+	
+
+
+
 	def _value(self, frame: Frame, operand):
 		if isinstance(operand, str):
 			if operand in frame.regs:
