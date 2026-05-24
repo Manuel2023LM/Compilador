@@ -3,11 +3,24 @@ from model import *
 def check_binop(op, left, right):
 
     # 🔥 ARITMÉTICOS
-    if op in ("+", "-", "*", "/", "%"):
+    numeric = (IntegerType, FloatType)
+
+    # ARITMÉTICOS
+    if op in ("+", "-", "*", "/", "^"):
+
+        if left in numeric and right in numeric:
+
+            if left == FloatType or right == FloatType:
+                return FloatType
+
+            return IntegerType
+
+        return None
+
+    # MOD
+    if op == "%":
         if left == IntegerType and right == IntegerType:
             return IntegerType
-        if left == FloatType and right == FloatType:
-            return FloatType
         return None
 
     # 🔥 RELACIONALES
@@ -25,7 +38,7 @@ def check_binop(op, left, right):
         return None
 
     # 🔥 LÓGICOS
-    if op in ("&&", "||"):
+    if op in ("&&", "||", "and", "or"):
         if left == BooleanType and right == BooleanType:
             return BooleanType
         return None

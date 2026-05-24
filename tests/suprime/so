@@ -1,0 +1,10 @@
+main: function integer () = {
+    x: integer = 0;
+    if (1 < 2) {
+        x = 10;
+    } else {
+        x = 99;
+    }
+    print x, "\n";
+    return 0;
+}

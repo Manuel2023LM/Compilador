@@ -9,15 +9,16 @@ def tokenize(src):
         ("COMMENT2", r'/\*[\s\S]*?\*/'),
         ("INC", r'\+\+'),
         ("DEC", r'--'),
+        ("OP", r'\+=|-=|\*=|/=|==|!=|<=|>=|<|>|\+|-|\*|/|\^|=|!|%'),
         ("LOGIC", r'&&|\|\|'),
         ("NUMBER", r'\d+(\.\d+)?'),
         ("STRING", r'"[^"]*"'),
         ("CHAR", r"'(\\.|[^\\'])+'"),
         ("ID", r'[A-Za-z_][A-Za-z0-9_]*'),
-        ("OP", r'\+=|-=|==|!=|<=|>=|<|>|\+|-|\*|/|=|!|%'),
         ("SYM", r'[{}()\[\],;:]'),
         ("SKIP", r'[ \t]+'),
         ("NEWLINE", r'\n'),
+        ("MISMATCH", r'.'),
     ]
 
     tok_regex = "|".join(f"(?P<{n}>{r})" for n, r in token_spec)
@@ -36,8 +37,14 @@ def tokenize(src):
         if kind in ("SKIP", "COMMENT1", "COMMENT2"):
             continue
 
+
+                
+        if kind == "MISMATCH":
+                    raise SyntaxError(f"Caracter ilegal '{value}' en línea {line}")
+
         tokens.append((value, line))
 
+        
     return tokens
 
 
@@ -46,6 +53,7 @@ def tokenize(src):
 def parse(source):
     tokens = tokenize(source)
     pos = 0
+    errors = []
 
     def peek():
         return tokens[pos][0] if pos < len(tokens) else None
@@ -58,18 +66,68 @@ def parse(source):
 
     def peek3():
         return tokens[pos+2][0] if pos+2 < len(tokens) else None
+    
+
+
+    
+
+    def syntax_error(msg):
+        errors.append(f"[Línea {line()}] {msg}")
+
+    def synchronize():
+
+        nonlocal pos
+
+        sync_tokens = {
+            ";",
+            "}",
+            "{",
+            "if",
+            "else",
+            "while",
+            "for",
+            "return",
+            "print",
+            "break",
+            "continue"
+        }
+
+        while pos < len(tokens):
+
+            tok = peek()
+
+            if tok in sync_tokens:
+
+                # consumir ; para no quedar pegado
+                if tok == ";":
+                    pos += 1
+
+                return
+
+            pos += 1
+
 
     def consume(expected=None):
+
         nonlocal pos
+
         tok = tokens[pos] if pos < len(tokens) else None
 
         if tok is None:
-            raise SyntaxError(f"EOF inesperado en la línea {line()}")
+            syntax_error("EOF inesperado")
+            return ("ERROR", line())
 
         value, ln = tok
 
         if expected and value != expected:
-            raise SyntaxError(f"Se esperaba '{expected}' pero se encontró '{value}' en la línea {ln}")
+
+            syntax_error(
+                f"Se esperaba '{expected}' pero se encontró '{value}'"
+            )
+            pos += 1
+            synchronize()
+
+            return ("ERROR", ln)
 
         pos += 1
         return value, ln
@@ -103,7 +161,8 @@ def parse(source):
             return types[tok]
 
         # 🔥 CLAVE: no consumir si no es tipo válido
-        raise SyntaxError(f"Tipo desconocido: {tok} en la línea {line()}")
+        syntax_error(f"Tipo desconocido: {tok} en la línea {line()}")
+        return IntegerType
 
     # ================= EXPRESSIONS =================
 
@@ -128,19 +187,19 @@ def parse(source):
             n.line = ln
             return n
 
-        if tok.isdigit():
+        if tok and tok.isdigit():
             v, ln = consume()
             n = Number(int(v))
             n.line = ln
             return n
 
-        if tok.startswith('"'):
+        if tok and tok.startswith('"'):
             v, ln = consume()
             n = String(v)
             n.line = ln
             return n
 
-        if tok.startswith("'"):
+        if tok and tok.startswith("'"):
             v, ln = consume()
             n = Char(v)
             n.line = ln
@@ -150,7 +209,7 @@ def parse(source):
             _, ln = consume("{")
             elems = []
 
-            while peek() != "}":
+            while peek() not in (None, "}"):
                 elems.append(parse_expr())
                 if peek() == ",":
                     consume(",")
@@ -160,7 +219,7 @@ def parse(source):
             n.line = ln
             return n
 
-        if tok.isidentifier():
+        if tok and tok.isidentifier():
             name, ln = consume()
 
             # call
@@ -188,10 +247,17 @@ def parse(source):
 
             return n
 
-        raise SyntaxError(f"Token inesperado '{tok}' en la línea {line()}")
+        syntax_error(f"Token inesperado '{tok}' en la línea {line()}")
+
+        _, ln = consume()
+
+        n = Number(0)
+        n.line = ln
+
+        return n
 
     def parse_unary():
-        if peek() in ("-", "!"):
+        if peek() in ("-", "!", "not"):
             op, ln = consume()
             n = UnaryOp(op, parse_unary())
             n.line = ln
@@ -208,18 +274,25 @@ def parse(source):
             return node
         return f
 
-    parse_mul = bin_layer(parse_unary, ("*", "/", "%"))
+    def parse_power():
+        node = parse_unary()
+        if peek() == "^":
+            op, ln = consume()
+            node = BinaryOp(op, node, parse_power())
+            node.line = ln
+        return node
+
+    parse_mul = bin_layer(parse_power, ("*", "/", "%"))
     parse_add = bin_layer(parse_mul, ("+", "-"))
     parse_rel = bin_layer(parse_add, ("<", ">", "<=", ">="))
     parse_eq  = bin_layer(parse_rel, ("==", "!="))
-    parse_logic = bin_layer(parse_eq, ("&&", "||"))
+    parse_logic = bin_layer(parse_eq, ("&&", "||", "and", "or"))
 
     def parse_expr():
         return parse_logic()
 
     # ================= STATEMENTS =================
 
-  
 
 
 
@@ -229,7 +302,7 @@ def parse(source):
         _, ln = consume("{")
         stmts = []
 
-        while peek() != "}":
+        while peek() is not None and peek() != "}":
             stmt = parse_statement()
             if stmt is not None:
                 stmts.append(stmt)
@@ -240,11 +313,11 @@ def parse(source):
         return b
 
 
-    def parse_vardecl():
+    def parse_vardecl(require_semicolon=True):
         name, ln = consume()
 
         if peek() != ":":
-            raise SyntaxError(f"Se esperaba ':' después de '{name}' en la línea {ln}")
+            syntax_error(f"Se esperaba ':' después de '{name}' en la línea {ln}")
 
         consume(":")
         t = parse_type()
@@ -254,7 +327,11 @@ def parse(source):
             consume("=")
             val = parse_expr()
 
-        consume(";")
+        if require_semicolon and peek() != ";":
+            syntax_error("faltó ';' en declaración")
+            synchronize()
+        elif require_semicolon:
+            consume(";")
 
         n = VarDecl(name, t, val)
         n.line = ln
@@ -264,7 +341,7 @@ def parse(source):
         target = parse_primary()
 
         # =  +=  -=
-        if peek() in ("=", "+=", "-="):
+        if peek() in ("=", "+=", "-=", "*=", "/="):
 
             op, ln = consume()
 
@@ -281,6 +358,16 @@ def parse(source):
 
             elif op == "-=":
                 binop = BinaryOp("-", target, val)
+                binop.line = ln
+                n = Assignment(target, binop)
+
+            elif op == "*=":
+                binop = BinaryOp("*", target, val)
+                binop.line = ln
+                n = Assignment(target, binop)
+
+            elif op == "/=":
+                binop = BinaryOp("/", target, val)
                 binop.line = ln
                 n = Assignment(target, binop)
 
@@ -317,27 +404,36 @@ def parse(source):
             n.line = ln
             return n
 
-        raise SyntaxError(f"Asignación inválida en la línea {line()}")
+        syntax_error(f"Asignación inválida en la línea {line()}")
+        synchronize()
+        return None
 
 
     def parse_if():
-        
+
         _, ln = consume("if")
         consume("(")
         cond = parse_expr()
         consume(")")
 
-        
+        # THEN
         if peek() == "{":
             then_b = parse_block().statements
         else:
             then_b = [parse_statement()]
 
+        # ELSE
         else_b = None
+
         if peek() == "else":
             consume("else")
-            if peek() == "{":
+
+            if peek() == "if":
+                else_b = [parse_if()]
+
+            elif peek() == "{":
                 else_b = parse_block().statements
+
             else:
                 else_b = [parse_statement()]
 
@@ -367,21 +463,29 @@ def parse(source):
 
         init = None
         if peek() != ";":
-            target = parse_primary()
-            consume("=")
-            val = parse_expr()
-            init = Assignment(target, val)
-            init.line = ln
+            if peek2() == ":":
+                init = parse_vardecl(require_semicolon=False)
+            else:
+                target = parse_primary()
+                consume("=")
+                val = parse_expr()
+                init = Assignment(target, val)
+                init.line = ln
         consume(";")
 
-        cond = parse_expr()
+        cond = None
+
+        if peek() != ";":
+            cond = parse_expr()
+
         consume(";")
 
+        
         update = None
         if peek() != ")":
             target = parse_primary()
 
-            if peek() in ("=", "+=", "-="):
+            if peek() in ("=", "+=", "-=", "*=", "/="):
 
                 op = consume()[0]
                 val = parse_expr()
@@ -398,6 +502,16 @@ def parse(source):
                 elif op == "-=":
                     binop = BinaryOp("-", target, val)
                     binop.line = ln
+                    update = Assignment(target, binop)
+                elif op == "*=":
+                    binop = BinaryOp("*", target, val)
+                    binop.line = ln
+                    update = Assignment(target, binop)
+
+                elif op == "/=":
+                    binop = BinaryOp("/", target, val)
+                    binop.line = ln
+                    update = Assignment(target, binop)    
 
                     update = Assignment(target, binop)
 
@@ -470,11 +584,11 @@ def parse(source):
             try:
                 val = parse_expr()
             except SyntaxError:
-                raise SyntaxError(f"línea {ln} Expresión inválida en return")
+                syntax_error(f"línea {ln} Expresión inválida en return")
         
         if peek() != ";":
             tok = peek()
-            raise SyntaxError(f"línea {ln} Se esperaba ';' después del return")
+            syntax_error(f"línea {ln} Se esperaba ';' después del return")
         
         consume(";")
         
@@ -485,7 +599,7 @@ def parse(source):
     def parse_print():
         _, ln = consume("print")
         args = []
-        while peek() != ";":
+        while peek() is not None and peek() != ";":
             args.append(parse_expr())
             if peek() == ",":
                 consume(",")
@@ -494,37 +608,117 @@ def parse(source):
         n.line = ln
         return n
 
-    def parse_statement():
-        tok = peek()
 
-        # vacío
-        if tok == ";":
+    def parse_break():
+        _, ln = consume("break")
+        consume(";")
+
+        n = Break()
+        n.line = ln
+        return n
+
+
+
+    def parse_continue():
+        _, ln = consume("continue")
+        consume(";")
+
+        n = Continue()
+        n.line = ln
+        return n
+
+    def starts_assignment():
+        if not (peek() and peek().isidentifier()):
+            return False
+
+        depth = 0
+        i = pos + 1
+        assignment_ops = {"=", "+=", "-=", "*=", "/=", "++", "--"}
+
+        while i < len(tokens):
+            tok = tokens[i][0]
+
+            if tok in (";", None):
+                return False
+
+            if tok in ("[", "("):
+                depth += 1
+            elif tok in ("]", ")"):
+                depth -= 1
+            elif depth == 0 and tok in assignment_ops:
+                return True
+
+            i += 1
+
+        return False
+
+
+    def parse_statement():
+
+        try:
+
+            tok = peek()
+
+            if tok == ";":
+                consume(";")
+                return None
+
+            if tok == "{":
+                return parse_block()
+
+            if tok == "if":
+                return parse_if()
+
+            if tok == "while":
+                return parse_while()
+
+            if tok == "for":
+                return parse_for()
+
+            if tok == "return":
+                return parse_return()
+
+            if tok == "print":
+                return parse_print()
+
+            if tok == "break":
+                return parse_break()
+
+            if tok == "continue":
+                return parse_continue()
+
+            if peek2() == ":" and peek3() != "function":
+                return parse_vardecl()
+
+            if tok in ("integer", "float", "boolean", "string", "char"):
+                syntax_error("Declaración inválida")
+                synchronize()
+                return None
+
+            if starts_assignment():
+                return parse_assignment()
+
+            if tok and tok.isidentifier() and peek2() == "(":
+                expr = parse_expr()
+                consume(";")
+                return expr
+
+            expr = parse_expr()
             consume(";")
+            return expr
+
+        except SyntaxError as e:
+
+            syntax_error(str(e))
+
+            synchronize()
+
             return None
 
-        if tok == "{": return parse_block()
-        if tok == "if": return parse_if()
-        if tok == "while": return parse_while()
-        if tok == "for": return parse_for()
-        if tok == "return": return parse_return()
-        if tok == "print": return parse_print()
 
-        # 🔥 CLAVE REAL: detectar declaración bien
-        if peek2() == ":":
-            return parse_vardecl()
 
-        # 🔥 NUEVO: detectar tipo sin :
-        if tok in ("integer", "float", "boolean", "string", "char"):
-            raise SyntaxError(f"Declaración inválida en la línea {line()}")
 
-        # assignment
-        if peek2() in ("=", "+=", "-=", "++", "--"):
-            return parse_assignment()
 
-        # 🔥 fallback expresión
-        expr = parse_expr()
-        consume(";")
-        return expr
 
     # ================= FUNCTION =================
 
@@ -537,7 +731,7 @@ def parse(source):
 
         consume("(")
         params = []
-        while peek() != ")":
+        while peek() not in (None, ")"):
             pname, _ = consume()
             consume(":")
             ptype = parse_type()
@@ -548,14 +742,14 @@ def parse(source):
 
         if peek() == ";":
             consume(";")
-            n = Function(name, ret, params, None)
+            n = Function(name, ret, params, Block([]))
             n.line = ln
             return n
 
         consume("=")
         body = parse_block()
 
-        n = Function(name, ret, params, body.statements)
+        n = Function(name, ret, params, body)
         n.line = ln
         return n
 
@@ -564,9 +758,28 @@ def parse(source):
     decls = []
 
     while peek():
-        if peek2() == ":" and peek3() == "function":
-            decls.append(parse_function())
-        else:
-            decls.append(parse_vardecl())
 
-    return Program(decls)
+        try:
+
+            if peek2() == ":" and peek3() == "function":
+
+                node = parse_function()
+
+            else:
+
+                node = parse_vardecl()
+
+            if node:
+                decls.append(node)
+
+        except SyntaxError as e:
+
+            syntax_error(str(e))
+
+            synchronize()
+
+    program = Program(decls)
+
+    program.errors = errors
+
+    return program

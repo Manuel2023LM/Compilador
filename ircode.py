@@ -67,6 +67,7 @@ class IRCodeGen:
         self.temp_count = 0
         self.label_count = 0
         self.scopes = []
+        self.local_count = 0
 
     @classmethod
     def generate(cls, node):
@@ -99,8 +100,12 @@ class IRCodeGen:
     def pop_scope(self):
         self.scopes.pop()
 
-    def bind(self, name, ty):
-        self.scopes[-1][name] = Storage(name, ty)
+    def bind(self, name, ty, ir_name=None):
+        self.scopes[-1][name] = Storage(ir_name or name, ty)
+
+    def new_local_name(self, name):
+        self.local_count += 1
+        return f"{name}${self.local_count}"
 
     def lookup(self, name):
 
@@ -161,6 +166,9 @@ class IRCodeGen:
 
     def visit(self, node):
 
+        if isinstance(node, list):
+            return self.visit_list(node)
+
         method = getattr(
             self,
             f"visit_{type(node).__name__}",
@@ -171,6 +179,13 @@ class IRCodeGen:
 
     def generic_visit(self, node):
         raise Exception(f"No visit_{type(node).__name__}")
+
+
+    def visit_list(self, nodes):
+
+        for n in nodes:
+            self.visit(n)
+
 
     # =====================================================
     # PROGRAM
@@ -203,13 +218,16 @@ class IRCodeGen:
 
         else:
 
-            self.emit(f"ALLOC{self.suffix(node.type)}", node.name)
+            local_name = self.new_local_name(node.name)
 
-            self.bind(node.name, node.type)
+            if node.value is None:
+                self.emit(f"ALLOC{self.suffix(node.type)}", local_name)
+
+            self.bind(node.name, node.type, local_name)
 
             if node.value:
                 reg = self.visit(node.value)
-                self.emit(f"STORE{self.suffix(node.type)}", reg, node.name)
+                self.emit(f"STORE{self.suffix(node.type)}", reg, local_name)
 
     def visit_Function(self, node):
 
@@ -229,13 +247,8 @@ class IRCodeGen:
         for p in node.params:
             self.bind(p.name, p.type)
 
-        if isinstance(node.body, Block):
-            for stmt in node.body.statements:
-                self.visit(stmt)
-
-        elif isinstance(node.body, list):
-            for stmt in node.body:
-                self.visit(stmt)
+        if node.body:
+            self.visit(node.body)
 
         if node.return_type == VoidType:
             self.emit("RET")
@@ -263,6 +276,9 @@ class IRCodeGen:
 
             reg = self.visit(arg)
 
+            if reg is None:
+                return
+
             ty = self.infer_type(arg)
 
             self.emit(f"PRINT{self.suffix(ty)}", reg)
@@ -281,6 +297,7 @@ class IRCodeGen:
 
         reg = self.visit(node.value)
 
+        # variable normal
         if isinstance(node.target, Identifier):
 
             storage = self.lookup(node.target.name)
@@ -288,9 +305,29 @@ class IRCodeGen:
             self.emit(
                 f"STORE{self.suffix(storage.ty)}",
                 reg,
-                node.target.name
+                storage.name
             )
 
+            return
+
+        # array[index]
+        if isinstance(node.target, ArrayAccess):
+
+            index = self.visit(node.target.index)
+            storage = self.lookup(node.target.array.name)
+
+            self.emit(
+                "STOREA",
+                reg,
+                storage.name,
+                index
+            )
+
+            return
+
+
+
+    
 
     def visit_If(self, node):
 
@@ -300,37 +337,31 @@ class IRCodeGen:
 
         cond = self.visit(node.cond)
 
-        # if con else
         if node.else_body:
 
             self.emit("CBRANCH", cond, then_label, else_label)
 
             self.emit("LABEL", then_label)
 
-            for stmt in node.then_body:
-                self.visit(stmt)
+            self.visit(node.then_body)
 
             self.emit("BRANCH", end_label)
 
             self.emit("LABEL", else_label)
 
-            for stmt in node.else_body:
-                self.visit(stmt)
+            self.visit(node.else_body)
 
             self.emit("LABEL", end_label)
 
-        # if sin else
         else:
 
             self.emit("CBRANCH", cond, then_label, end_label)
 
             self.emit("LABEL", then_label)
 
-            for stmt in node.then_body:
-                self.visit(stmt)
+            self.visit(node.then_body)
 
             self.emit("LABEL", end_label)
-
 
     def visit_While(self, node):
 
@@ -346,8 +377,7 @@ class IRCodeGen:
 
         self.emit("LABEL", body_label)
 
-        for stmt in node.body:
-            self.visit(stmt)
+        self.visit(node.body)
 
         self.emit("BRANCH", test_label)
 
@@ -373,8 +403,7 @@ class IRCodeGen:
 
         self.emit("LABEL", body_label)
 
-        for stmt in node.body:
-            self.visit(stmt)
+        self.visit(node.body)
 
         self.emit("LABEL", step_label)
 
@@ -398,7 +427,7 @@ class IRCodeGen:
 
         self.emit(
             f"LOAD{self.suffix(storage.ty)}",
-            node.name,
+            storage.name,
             tmp
         )
 
@@ -408,18 +437,37 @@ class IRCodeGen:
 
         tmp = self.new_temp()
 
-        self.emit("MOVI", int(node.value), tmp)
+        value = getattr(node, "value", 0)
+
+        if isinstance(value, list):
+
+            if len(value) > 0:
+                value = value[0]
+            else:
+                value = 0
+
+        try:
+            value = int(value)
+        except:
+            value = 0
+
+        self.emit("MOVI", value, tmp)
 
         return tmp
+    
 
     def visit_Float(self, node):
 
         tmp = self.new_temp()
 
-        self.emit("MOVF", float(node.value), tmp)
+        try:
+            value = float(node.value)
+        except:
+            value = 0.0
+
+        self.emit("MOVF", value, tmp)
 
         return tmp
-
     def visit_Boolean(self, node):
 
         tmp = self.new_temp()
@@ -432,33 +480,50 @@ class IRCodeGen:
 
         tmp = self.new_temp()
 
-        value = node.value[1:-1]
+        value = getattr(node, "value", "'\\0'")
 
-        escapes = {
-            "\\n": "\n",
-            "\\t": "\t",
-            "\\r": "\r",
-            "\\0": "\0",
-            "\\\\": "\\",
-            "\\'": "'",
-            '\\"': '"',
-        }
+        if not isinstance(value, str):
+            value = "'\\0'"
 
-        if value in escapes:
-            value = escapes[value]
+        try:
+            value = value[1:-1]
 
-        if isinstance(value, str):
-            value = ord(value[0])
+            escapes = {
+                "\\n": "\n",
+                "\\t": "\t",
+                "\\r": "\r",
+                "\\0": "\0",
+                "\\\\": "\\",
+                "\\'": "'",
+                '\\"': '"',
+            }
+
+            if value in escapes:
+                value = escapes[value]
+
+            value = ord(value[0]) if value else 0
+
+        except:
+            value = 0
 
         self.emit("MOVB", value, tmp)
 
         return tmp
-    
 
     
     def visit_String(self, node):
 
-        value = node.value[1:-1]
+        raw = getattr(node, "value", "")
+
+        if isinstance(raw, str):
+
+            if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+                value = raw[1:-1]
+            else:
+                value = raw
+
+        else:
+            value = ""
 
         label = f".str{len(self.program.globals)}"
 
@@ -475,13 +540,59 @@ class IRCodeGen:
 
         return tmp
 
-
     def visit_ArrayLiteral(self, node):
 
         label = f"ARR_{len(self.program.globals)}"
 
+        values = []
+
+        for elem in node.elements:
+
+            if isinstance(elem, Number):
+
+                values.append(
+                    int(getattr(elem, "value", 0))
+                )
+
+            elif isinstance(elem, Float):
+
+                values.append(
+                    float(getattr(elem, "value", 0.0))
+                )
+
+            elif isinstance(elem, Boolean):
+
+                values.append(
+                    1 if getattr(elem, "value", False) else 0
+                )
+
+            elif isinstance(elem, Char):
+
+                raw = getattr(elem, "value", "'\\0'")
+
+                try:
+
+                    raw = raw[1:-1]
+
+                    values.append(
+                        ord(raw[0]) if raw else 0
+                    )
+
+                except:
+
+                    values.append(0)
+
+            elif isinstance(elem, Identifier):
+
+                # placeholder
+                values.append(0)
+
+            else:
+
+                values.append(0)
+
         self.program.globals.append(
-            ("ARRAY", label, len(node.elements))
+            ("ARRAY", label, values)
         )
 
         tmp = self.new_temp()
@@ -496,15 +607,23 @@ class IRCodeGen:
 
         tmp = self.new_temp()
 
+        arr_name = getattr(node.array, "name", None)
+
+        if arr_name is None:
+            arr_name = "INVALID_ARRAY"
+        else:
+            arr_name = self.lookup(arr_name).name
+
         self.emit(
             "LOADA",
-            node.array.name,
+            arr_name,
             index,
             tmp
         )
 
         return tmp
-
+    
+    
     def visit_Call(self, node):
 
         args = []
@@ -512,11 +631,28 @@ class IRCodeGen:
         for arg in node.args:
             args.append(self.visit(arg))
 
+        # buscar función
+        fn = None
+
+        for f in self.program.functions:
+            if f.name == node.name:
+                fn = f
+                break
+
+        # función void
+        if fn and fn.return_type == VoidType:
+
+            self.emit("CALL", node.name, *args)
+
+            return None
+
         tmp = self.new_temp()
 
         self.emit("CALL", node.name, *args, tmp)
 
         return tmp
+
+
 
     def visit_UnaryOp(self, node):
 
@@ -555,6 +691,7 @@ class IRCodeGen:
             "-": f"SUB{s}",
             "*": f"MUL{s}",
             "/": f"DIV{s}",
+            "^": f"POW{s}",
         }
 
         if node.op in arith:
@@ -565,12 +702,7 @@ class IRCodeGen:
 
         if node.op == "%":
 
-            q = self.new_temp()
-            m = self.new_temp()
-
-            self.emit(f"DIV{s}", left, right, q)
-            self.emit(f"MUL{s}", q, right, m)
-            self.emit(f"SUB{s}", left, m, tmp)
+            self.emit(f"MOD{s}", left, right, tmp)
 
             return tmp
 

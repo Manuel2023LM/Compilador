@@ -107,8 +107,6 @@ class ASTOptimizer:
 
         if isinstance(node, list):
 
-            print("DEBUG LISTA:", node)
-
             new_nodes = []
 
             for item in node:
@@ -188,11 +186,7 @@ class ASTOptimizer:
                     self.mark_changed()
                     continue
 
-                if isinstance(optimized, Block):
-                    new_body.extend(optimized.statements)
-                    self.mark_changed()
-                else:
-                    new_body.append(optimized)
+                new_body.append(optimized)
 
             return new_body
 
@@ -235,11 +229,7 @@ class ASTOptimizer:
                 self.mark_changed()
                 continue
 
-            if isinstance(optimized, Block):
-                new_statements.extend(optimized.statements)
-                self.mark_changed()
-            else:
-                new_statements.append(optimized)
+            new_statements.append(optimized)
 
         node.statements = new_statements
 
@@ -405,6 +395,14 @@ class ASTOptimizer:
 
                     self.mark_changed()
                     return Number(lv % rv)
+
+                elif op == "^":
+                    self.mark_changed()
+
+                    if is_int(left) and is_int(right) and rv >= 0:
+                        return Number(lv ** rv)
+
+                    return Float(lv ** rv)
 
             except:
                 pass

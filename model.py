@@ -25,6 +25,12 @@ class Node:
 
 
 
+class Break(Node):
+    pass
+
+class Continue(Node):
+    pass
+
 # ================= PROGRAM =================
 
 class Program(Node):

@@ -73,6 +73,9 @@ class IRInterpreter:
 			args = list(args) + [0] * (expected - len(args))
 
 		return self.call(name, list(args))
+	
+
+	
 
 
 	def call(self, name: str, args: list[Any]):
@@ -163,7 +166,10 @@ class IRInterpreter:
 		# ---------------------------------
 		if op == "ARRAY":
 			_, name, size = inst
-			self.globals[name] = [0] * int(size)
+			if isinstance(size, list):
+				self.globals[name] = list(size)
+			else:
+				self.globals[name] = [0] * int(size)
 			return
 
 		# ---------------------------------
@@ -255,6 +261,8 @@ class IRInterpreter:
 			return 0.0
 		if op.endswith("S"):
 			return None
+		if op.endswith("A"):
+			return []
 		return 0
 		
 	def _trace_state(self, frame: Frame, pc: int, inst: tuple):
@@ -418,7 +426,7 @@ class IRInterpreter:
 		# -------------------------
 		# Variables locales/globales
 		# -------------------------
-		if op in {"ALLOCI", "ALLOCF", "ALLOCB", "ALLOCS"}:
+		if op in {"ALLOCI", "ALLOCF", "ALLOCB", "ALLOCS", "ALLOCA"}:
 			_, name = inst
 
 			frame.locals.setdefault(name, self._default_for_op(op))
@@ -470,7 +478,19 @@ class IRInterpreter:
 
 				return None
 
-		if op in {"STOREI", "STOREF", "STOREB", "STORES", "STOREA"}:
+		if op == "STOREA":
+			if len(inst) == 4:
+				_, source, name, index = inst
+				arr = self._load_var(frame, name)
+				idx = self._value(frame, index)
+				arr[idx] = self._value(frame, source)
+				return None
+
+			_, source, name = inst
+			self._store_var(frame, name, self._value(frame, source))
+			return None
+
+		if op in {"STOREI", "STOREF", "STOREB", "STORES"}:
 
 			_, source, name = inst
 
@@ -503,7 +523,7 @@ class IRInterpreter:
 		# -------------------------
 		# Aritmética
 		# -------------------------
-		if op in {"ADDI", "SUBI", "MULI", "DIVI", "ADDF", "SUBF", "MULF", "DIVF"}:
+		if op in {"ADDI", "SUBI", "MULI", "DIVI", "MODI", "POWI", "ADDF", "SUBF", "MULF", "DIVF", "MODF", "POWF"}:
 			_, r1, r2, target = inst
 			a = self._value(frame, r1)
 			b = self._value(frame, r2)
@@ -516,6 +536,11 @@ class IRInterpreter:
 			elif op.startswith("DIV"):
 				if b == 0:
 					raise IRRuntimeError(
+						f"Division por cero: no se puede evaluar {a} / 0. "
+						"El divisor de una division no puede ser cero."
+					)
+				if b == 0:
+					raise IRRuntimeError(
 						f"División por cero en {op}: divisor {r2} vale 0; "
 						f"dividendo {r1} vale {a}"
 					)
@@ -523,6 +548,25 @@ class IRInterpreter:
 					out = int(a / b)   # truncamiento hacia cero
 				else:
 					out = a / b
+			elif op.startswith("MOD"):
+				if b == 0:
+					raise IRRuntimeError(
+						f"Modulo por cero: no se puede evaluar {a} % 0. "
+						"El divisor de modulo no puede ser cero."
+					)
+				if op.endswith("I"):
+					out = int(a) % int(b)
+				else:
+					out = a % b
+			elif op.startswith("POW"):
+				if op.endswith("I"):
+					if b < 0:
+						raise IRRuntimeError(
+							"Potencia entera invalida: el exponente no puede ser negativo."
+						)
+					out = int(a ** b)
+				else:
+					out = a ** b
 			frame.regs[target] = out
 			return None
 			
@@ -540,6 +584,11 @@ class IRInterpreter:
 			else:
 				out = a ^ b
 			frame.regs[target] = out
+			return None
+
+		if op == "NOT":
+			_, source, target = inst
+			frame.regs[target] = 0 if self._value(frame, source) else 1
 			return None
 			
 		# -------------------------

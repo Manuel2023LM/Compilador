@@ -276,6 +276,12 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 > Si se generó con la carpeta `bin` (estilo Linux/Git Bash), usa la tercera línea reemplazando el comando anterior. 
 >Verás el indicador `(venv)` al inicio de la terminal una vez completado con éxito.
 
+Instalación de Dependencias
+Una vez que el entorno esté activo (venv), instala los paquetes necesarios ejecutando:
+
+PowerShell
+pip install multimethod rich
+
 
 # ⚡ Niveles de Optimización
 

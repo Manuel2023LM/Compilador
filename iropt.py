@@ -174,6 +174,7 @@ def peephole(instrs):
 def constant_propagation(instrs):
 
     constants = {}
+    var_constants = {}
 
     optimized = []
 
@@ -206,49 +207,64 @@ def constant_propagation(instrs):
         # -------------------------------------------------
 
         elif op in (
-            "ADDI", "SUBI", "MULI", "DIVI",
-            "ADDF", "SUBF", "MULF", "DIVF",
+            "ADDI", "SUBI", "MULI", "DIVI", "MODI", "POWI",
+            "ADDF", "SUBF", "MULF", "DIVF", "MODF", "POWF",
             "AND", "OR", "XOR"
         ):
 
-            a = replace_operand(instr[1], constants)
-            b = replace_operand(instr[2], constants)
+            a = instr[1]
+            b = instr[2]
+            aval = replace_operand(a, constants)
+            bval = replace_operand(b, constants)
             target = instr[3]
 
             # ---------------------------------------------
             # CONSTANT FOLDING SOBRE IR
             # ---------------------------------------------
 
-            if is_number(a) and is_number(b):
+            if is_number(aval) and is_number(bval):
 
                 try:
 
                     result = None
 
                     if op.startswith("ADD"):
-                        result = a + b
+                        result = aval + bval
 
                     elif op.startswith("SUB"):
-                        result = a - b
+                        result = aval - bval
 
                     elif op.startswith("MUL"):
-                        result = a * b
+                        result = aval * bval
 
-                    elif op.startswith("DIV") and b != 0:
+                    elif op.startswith("DIV") and bval != 0:
 
                         if op.endswith("I"):
-                            result = a // b
+                            result = aval // bval
                         else:
-                            result = a / b
+                            result = aval / bval
+
+                    elif op.startswith("MOD") and bval != 0:
+
+                        if op.endswith("I"):
+                            result = int(aval) % int(bval)
+                        else:
+                            result = aval % bval
+
+                    elif op.startswith("POW"):
+                        if op.endswith("I") and bval < 0:
+                            result = None
+                        else:
+                            result = aval ** bval
 
                     elif op == "AND":
-                        result = a & b
+                        result = aval & bval
 
                     elif op == "OR":
-                        result = a | b
+                        result = aval | bval
 
                     elif op == "XOR":
-                        result = a ^ b
+                        result = aval ^ bval
 
                     if result is not None:
 
@@ -320,11 +336,15 @@ def constant_propagation(instrs):
 
         elif op.startswith("LOAD"):
 
+            name = instr[1]
             target = instr[-1]
 
             optimized.append(instr)
 
-            constants.pop(target, None)
+            if name in var_constants:
+                constants[target] = var_constants[name]
+            else:
+                constants.pop(target, None)
 
             continue
 
@@ -335,6 +355,15 @@ def constant_propagation(instrs):
         elif op.startswith("STORE"):
 
             optimized.append(instr)
+
+            source = instr[1]
+            name = instr[2]
+            value = replace_operand(source, constants)
+
+            if is_number(value):
+                var_constants[name] = value
+            else:
+                var_constants.pop(name, None)
 
             continue
 
@@ -352,6 +381,22 @@ def constant_propagation(instrs):
 
             continue
 
+
+        # -------------------------------------------------
+        # LABEL invalida constantes de variables
+        # -------------------------------------------------
+
+        elif op == "LABEL":
+
+            optimized.append(instr)
+
+            # En un LABEL (punto de entrada/salto), invalidar
+            # variables constantes porque pueden haber llegado
+            # de múltiples paths o de un salto hacia atrás
+            var_constants.clear()
+
+            # Mantener constantes de registros locales
+            continue
 
         # -------------------------------------------------
         # CBRANCH constante
@@ -488,8 +533,8 @@ def is_pure_instruction(op):
             "MOVI", "MOVF", "MOVB",
             "ADDR",
 
-            "ADDI", "SUBI", "MULI", "DIVI",
-            "ADDF", "SUBF", "MULF", "DIVF",
+            "ADDI", "SUBI", "MULI", "DIVI", "MODI", "POWI",
+            "ADDF", "SUBF", "MULF", "DIVF", "MODF", "POWF",
 
             "CMPI", "CMPF", "CMPB",
 
@@ -518,8 +563,8 @@ def get_defined_register(instr):
     # instrucciones de 4 operandos
     elif op in (
         "ADDR",
-        "ADDI", "SUBI", "MULI", "DIVI",
-        "ADDF", "SUBF", "MULF", "DIVF",
+        "ADDI", "SUBI", "MULI", "DIVI", "MODI", "POWI",
+        "ADDF", "SUBF", "MULF", "DIVF", "MODF", "POWF",
         "AND", "OR", "XOR"
     ):
 
@@ -758,8 +803,6 @@ def optimize_function(fn, verbose=False):
     instrs = remove_redundant_load_store(instrs)
 
     instrs = dead_code_elimination(instrs)
-
-    instrs = remove_dead_stores(instrs)
 
     instrs = remove_dead_alloc(instrs)
 

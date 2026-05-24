@@ -1,0 +1,6 @@
+main: function integer () = {
+    a: integer = 10;
+    b: integer = 0;
+    print a / b, "\n";
+    return 0;
+}

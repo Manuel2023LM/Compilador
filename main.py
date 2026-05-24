@@ -241,7 +241,8 @@ def run_file(
     run_interpreter=True,
     show_ast=False,
     show_ir=False,
-    quiet=False
+    quiet=False,
+    runtime_errors_ok=False
 ):
     start = time.perf_counter()
     if not quiet:
@@ -263,6 +264,12 @@ def run_file(
 
         # ========= PARSER =========
         ast = parse(source)
+
+        if getattr(ast, "errors", None):
+            print("\n[bold red]✗ Error de sintaxis[/bold red]")
+            for err in ast.errors:
+                print(f"[red]error:[/red] {err}")
+            return False
 
         # ========= CHECKER =========
         checker = Checker()
@@ -434,11 +441,20 @@ def run_file(
 
     except Exception as e:
 
-        print("\n[bold yellow]⚠ Runtime Error[/bold yellow]")
-        print(f"[yellow]{e}[/yellow]")
+        print("\n[bold yellow]⚠ Error de ejecución[/bold yellow]")
+        message = str(e)
+
+        if "Division por cero" in message or ("Divisi" in message and "por cero" in message):
+            first_line = message.splitlines()[0]
+            print(f"[bold yellow]{first_line}[/bold yellow]")
+            print("[yellow]Revisa la expresion de division: el valor a la derecha de '/' llego como 0.[/yellow]")
+            if "--trace" in sys.argv:
+                print(f"[dim]{message}[/dim]")
+        else:
+            print(f"[yellow]{message} \n operacion invalia para ejecutar [/yellow]")
 
         # El checker y el IR fueron exitosos
-        return True
+        return True if runtime_errors_ok else False
 
 
 # ================= EJECUTAR CARPETA =================
@@ -498,9 +514,11 @@ def run_folder(
         ok = run_file(
                 path,
                 opt_level=opt_level,
+                run_interpreter=True,
                 show_ast=show_ast,
                 show_ir=show_ir,
-                quiet=quiet
+                quiet=quiet,
+                runtime_errors_ok=is_good
             )
 
         if is_good:
@@ -627,3 +645,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    

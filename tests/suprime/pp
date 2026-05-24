@@ -1,0 +1,82 @@
+/* Fan de Anuel y Karol G */
+
+es_bichota: function boolean (flow: integer) = {
+    if (flow >= 100) {
+        return true;
+    }
+    return false;
+}
+
+nivel_real: function string (puntos: integer) = {
+    if (puntos >= 100) {
+        return "BICHOTA LEVEL";
+    }
+    if (puntos >= 75) {
+        return "Con flow";
+    }
+    if (puntos >= 50) {
+        return "Promedio";
+    }
+    return "Sin flow";
+}
+
+contar_colabs: function integer (a: integer, b: integer) = {
+    return a + b;
+}
+
+main: function integer () = {
+
+    anuel_flow: integer = 95;
+    karol_flow: integer = 100;
+    colabs_anuel: integer = 12;
+    colabs_karol: integer = 15;
+
+    print "=== REAL HASTA LA MUERTE BRRRR LA DOBLEA EL REY DEL TRAP TU DIME QUIEN ES FEID ===", "\n";
+
+
+    print "=== ANUEL AA ===", "\n";
+    print "Flow: ", anuel_flow, "\n";
+    print "Es bichota: ", es_bichota(anuel_flow), "\n";
+    print "Nivel: ", nivel_real(anuel_flow), "\n";
+
+    print "=== KAROL G ===", "\n";
+    print "Flow: ", karol_flow, "\n";
+    print "Es bichota: ", es_bichota(karol_flow), "\n";
+    print "Nivel: ", nivel_real(karol_flow), "\n";
+
+    print "=== COLABORACIONES ===", "\n";
+    total: integer = contar_colabs(colabs_anuel, colabs_karol);
+    print "Colabs Anuel: ", colabs_anuel, "\n";
+    print "Colabs Karol: ", colabs_karol, "\n";
+    print "Total colabs: ", total, "\n";
+
+    print "=== QUIEN TIENE MAS FLOW ===", "\n";
+    if (karol_flow > anuel_flow) {
+        print "Karol G tiene mas flow", "\n";
+    } else if (anuel_flow > karol_flow) {
+        print "Anuel tiene mas flow", "\n";
+    } else {
+        print "Empate de flow", "\n";
+    }
+
+    print "=== CONTANDO HITS ===", "\n";
+    hits: integer = 0;
+    i: integer = 0;
+    for (i = 1; i <= 10; i++) {
+        hits = hits + i;
+    }
+    print "Hits acumulados: ", hits, "\n";
+
+    print "=== SUBIENDO EL FLOW ===", "\n";
+    flow_actual: integer = 50;
+    while (flow_actual < karol_flow) {
+        flow_actual = flow_actual + 10;
+    }
+    print "Flow final: ", flow_actual, "\n";
+
+    print "=== DIFERENCIA DE FLOW ===", "\n";
+    diferencia: integer = karol_flow - anuel_flow;
+    print "Karol le saca a Anuel: ", diferencia, "\n";
+
+    return 0;
+}

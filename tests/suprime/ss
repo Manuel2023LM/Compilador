@@ -1,0 +1,9 @@
+main: function integer () = {
+    a: integer = 10;
+    b: integer = 3;
+    print a + b * 2, "\n";
+    print (a + b) * 2, "\n";
+    print a % b, "\n";
+    print a ^ 2, "\n";
+    return 0;
+}
